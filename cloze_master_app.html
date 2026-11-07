@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- Etiquetas para convertir en Aplicación (PWA) -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cloze Master">
+    
+    <!-- Ícono para iOS y Android -->
+    <link rel="apple-touch-icon" href="https://ui-avatars.com/api/?name=CM&background=2563eb&color=fff&size=256&rounded=true">
+    
+    <!-- Manifest integrado para Android -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Cloze Master","short_name":"ClozeMaster","display":"standalone","background_color":"%230f172a","theme_color":"%230f172a","icons":[{"src":"https://ui-avatars.com/api/?name=CM&background=2563eb&color=fff&size=256&rounded=true","sizes":"256x256","type":"image/png"}]}'>
+
+    <title>Connectors Master - OET Cloze</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Fondo oscuro (slate-900) */
+            color: #f8fafc; /* Texto claro (slate-50) */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: #0f172a;
+            min-height: 100vh;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow-x: hidden;
+        }
+        /* Custom Animations */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        .slide-up { animation: slideUp 0.4s ease-out; }
+        .shake { animation: shake 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+        
+        /* Samsung One UI / Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.75rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .glass-header {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass-button {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.25rem;
+        }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- DATA BASE (From provided PDF) ---
+        const database = [
+            // ADDITION & SEQUENCE
+            { word: "and", meaning: "y", example: "She studies English [blank] French.", exampleEs: "Ella estudia inglés y francés.", explanation: "'And' conecta elementos o ideas similares añadiendo información.", usage: "Úsalo en medio de la oración para unir elementos de la misma categoría o ideas sin contraste.", category: "Addition" },
+            { word: "also", meaning: "también", example: "He [blank] enjoys reading.", exampleEs: "Él también disfruta leer.", explanation: "'Also' se usa para añadir una idea extra que complementa la anterior.", usage: "Úsalo típicamente antes del verbo principal o después del verbo 'to be' para añadir información a una idea ya mencionada.", category: "Addition" },
+            { word: "moreover", meaning: "además / es más", example: "It is cheap; [blank], it is reliable.", exampleEs: "Es barato; además, es confiable.", explanation: "'Moreover' añade información que refuerza fuertemente el punto anterior.", usage: "Úsalo al inicio de una nueva oración o después de un punto y coma, seguido de una coma, en contextos muy formales o académicos.", category: "Addition" },
+            { word: "furthermore", meaning: "además", example: "[blank], the results were positive.", exampleEs: "Además, los resultados fueron positivos.", explanation: "'Furthermore' introduce un punto adicional a un argumento (formal).", usage: "Úsalo igual que 'moreover', al principio de la oración con coma, para escalar o añadir peso a un argumento previo.", category: "Addition" },
+            { word: "in addition", meaning: "además", example: "[blank], we have more time.", exampleEs: "Además, tenemos más tiempo.", explanation: "'In addition' se usa para sumar un nuevo punto o argumento.", usage: "Úsalo al principio de una oración (seguido de coma) o como 'in addition to' seguido de un sustantivo o verbo en -ing.", category: "Addition" },
+            { word: "besides", meaning: "además / aparte de", example: "[blank] English, she studies French.", exampleEs: "Aparte del inglés, ella estudia francés.", explanation: "'Besides' significa 'aparte de' o 'además de' lo ya mencionado.", usage: "Úsalo seguido de un sustantivo/pronombre para decir 'además de esto', o al inicio de oración (con coma) para añadir un argumento definitivo.", category: "Addition" },
+            { word: "not only ... but also", meaning: "no solo... sino también", example: "It is [blank] useful [blank] easy.", exampleEs: "No es solo útil, sino también fácil.", explanation: "Correlativo que destaca que ambas cualidades están presentes.", usage: "Úsalo separando dos características, verbos o sustantivos para enfatizar fuertemente que ambas ocurren de forma conjunta.", category: "Addition", special: true },
+            { word: "first", meaning: "primero", example: "[blank], read the question.", exampleEs: "Primero, lee la pregunta.", explanation: "'First' indica el paso inicial de una secuencia.", usage: "Úsalo al inicio de una oración, generalmente seguido de una coma, para introducir el primer punto de una serie.", category: "Sequence" },
+            { word: "firstly", meaning: "primero", example: "[blank], read the question.", exampleEs: "En primer lugar, lee la pregunta.", explanation: "'Firstly' es similar a 'first', usado comúnmente para listar argumentos.", usage: "Úsalo de forma intercambiable con 'first' en contextos formales para el primer argumento de una lista.", category: "Sequence" },
+            { word: "next", meaning: "después / a continuación", example: "[blank], choose an answer.", exampleEs: "A continuación, elige una respuesta.", explanation: "'Next' señala la acción inmediatamente posterior.", usage: "Úsalo para transiciones de tiempo o secuencias lógicas de instrucciones, casi siempre al principio con coma.", category: "Sequence" },
+            { word: "then", meaning: "luego / entonces", example: "[blank], check the context.", exampleEs: "Luego, revisa el contexto.", explanation: "'Then' indica lo que sucede justo después en el tiempo.", usage: "Úsalo en medio o inicio de oración. A diferencia de 'next', a menudo no lleva coma inmediatamente después.", category: "Sequence" },
+            { word: "after that", meaning: "después de eso", example: "[blank], review your work.", exampleEs: "Después de eso, revisa tu trabajo.", explanation: "'After that' hace referencia a una acción que sigue a la recién mencionada.", usage: "Úsalo justo después de describir una acción completada para introducir claramente el siguiente paso.", category: "Sequence" },
+            { word: "subsequently", meaning: "posteriormente", example: "She applied and [blank] got a job.", exampleEs: "Ella aplicó y posteriormente consiguió un empleo.", explanation: "'Subsequently' es una forma formal de decir 'después'.", usage: "Úsalo principalmente en inglés formal o escrito para describir eventos posteriores o resultados.", category: "Sequence" },
+            { word: "finally", meaning: "finalmente", example: "[blank], submit your answers.", exampleEs: "Finalmente, envía tus respuestas.", explanation: "'Finally' marca el último paso de una lista o proceso.", usage: "Úsalo obligatoriamente al inicio de la oración final (con coma) al terminar una secuencia de eventos o lista de argumentos.", category: "Sequence" },
+            
+            // CONTRAST & CONCESSION
+            { word: "but", meaning: "pero", example: "It was cold, [blank] we went out.", exampleEs: "Hacía frío, pero salimos.", explanation: "'But' introduce un contraste directo e informal.", usage: "Úsalo siempre en medio de la oración para contrastar dos ideas (se antecede con coma si une dos oraciones completas).", category: "Contrast" },
+            { word: "however", meaning: "sin embargo", example: "It was late; [blank], we stayed.", exampleEs: "Era tarde; sin embargo, nos quedamos.", explanation: "'However' introduce una idea que contrasta con la anterior (más formal que 'but').", usage: "Úsalo al inicio de oración o tras punto y coma, SIEMPRE seguido de una coma.", category: "Contrast" },
+            { word: "whereas", meaning: "mientras que (contraste)", example: "I like tea, [blank] she prefers coffee.", exampleEs: "Me gusta el té, mientras que ella prefiere el café.", explanation: "'Whereas' compara dos hechos que contrastan entre sí.", usage: "Úsalo al principio o en medio de una oración para comparar directamente dos hechos o personas distintas.", category: "Contrast" },
+            { word: "while", meaning: "mientras que (contraste)", example: "[blank] he reads, she prefers podcasts.", exampleEs: "Mientras que él lee, ella prefiere los podcasts.", explanation: "'While' se puede usar igual que 'whereas' para contrastar dos cosas.", usage: "Úsalo como equivalente de 'whereas' para contraste (aparte de su uso de tiempo), seguido de sujeto y verbo.", category: "Contrast" },
+            { word: "unlike", meaning: "a diferencia de", example: "[blank] John, Ana likes math.", exampleEs: "A diferencia de John, a Ana le gustan las matemáticas.", explanation: "'Unlike' señala que dos cosas o personas no son iguales.", usage: "Úsalo al inicio o final de oración, seguido inmediatamente de un sustantivo o pronombre (nunca de un verbo).", category: "Contrast" },
+            { word: "on the other hand", meaning: "por otro lado", example: "It is cheap; [blank], it is slow.", exampleEs: "Es barato; por otro lado, es lento.", explanation: "Presenta un punto de vista o hecho opuesto al recién mencionado.", usage: "Úsalo para presentar una perspectiva alternativa, típicamente después de que ya se presentó un primer punto.", category: "Contrast" },
+            { word: "in contrast", meaning: "en cambio / en contraste", example: "[blank], the new method is faster.", exampleEs: "En cambio, el nuevo método es más rápido.", explanation: "Destaca una diferencia notable con algo anterior.", usage: "Úsalo al inicio de una oración, con coma, o como 'in contrast to' + sustantivo.", category: "Contrast" },
+            { word: "although", meaning: "aunque (+ oración)", example: "[blank] it rained, we went out.", exampleEs: "Aunque llovió, salimos.", explanation: "'Although' introduce una concesión, seguido de sujeto y verbo.", usage: "Úsalo al principio o en el medio de la frase, obligatoriamente seguido de una cláusula completa (Sujeto + Verbo).", category: "Concession" },
+            { word: "even though", meaning: "aunque / a pesar de que", example: "[blank] he was tired, he studied.", exampleEs: "A pesar de que estaba cansado, estudió.", explanation: "Es una versión más enfática de 'although'.", usage: "Úsalo exactamente igual que 'although' (con sujeto y verbo), pero cuando la sorpresa o el obstáculo es más fuerte.", category: "Concession" },
+            { word: "despite", meaning: "a pesar de (+ nombre/-ing)", example: "[blank] the rain, we went out.", exampleEs: "A pesar de la lluvia, salimos.", explanation: "'Despite' va seguido de un sustantivo, pronombre o gerundio (-ing), nunca de una oración completa.", usage: "Úsalo seguido SOLO de un sustantivo, pronombre o verbo en -ing. ¡Prohibido poner Sujeto + Verbo justo después!", category: "Concession" },
+            { word: "in spite of", meaning: "a pesar de (+ nombre/-ing)", example: "[blank] feeling ill, she worked.", exampleEs: "A pesar de sentirse mal, ella trabajó.", explanation: "Significa lo mismo y funciona gramaticalmente igual que 'despite'.", usage: "Úsalo exactamente con las mismas reglas que 'despite' (Sustantivo, pronombre o -ing).", category: "Concession" },
+            { word: "nevertheless", meaning: "no obstante", example: "The test was hard; [blank], she passed.", exampleEs: "El examen era difícil; no obstante, ella aprobó.", explanation: "Muy formal, introduce un resultado sorprendente a pesar de lo dicho antes.", usage: "Úsalo en contextos muy formales, al inicio de una oración o tras punto y coma, seguido de una coma.", category: "Concession" },
+            { word: "even so", meaning: "aun así", example: "It was difficult. [blank], we finished.", exampleEs: "Fue difícil. Aun así, terminamos.", explanation: "'Even so' significa 'a pesar de eso' refiriéndose a una oración anterior.", usage: "Úsalo al inicio de una oración, tras un punto, para aceptar la dificultad previa pero mostrar un resultado distinto.", category: "Concession" },
+
+            // CAUSE & RESULT
+            { word: "because", meaning: "porque (+ oración)", example: "We stayed in [blank] it was raining.", exampleEs: "Nos quedamos en casa porque estaba lloviendo.", explanation: "'Because' explica la razón y va seguido de sujeto y verbo.", usage: "Úsalo para dar la razón de algo, asegurándote de que le siga una cláusula completa (Sujeto + Verbo).", category: "Cause" },
+            { word: "because of", meaning: "debido a (+ nombre)", example: "The game stopped [blank] the rain.", exampleEs: "El juego se detuvo debido a la lluvia.", explanation: "'Because of' se usa antes de un sustantivo para indicar la causa.", usage: "Úsalo seguido únicamente de un sustantivo o pronombre que sea la causa de la acción.", category: "Cause" },
+            { word: "since", meaning: "ya que / puesto que", example: "[blank] it was late, we left.", exampleEs: "Ya que era tarde, nos fuimos.", explanation: "Funciona como 'because' pero la causa es obvia o ya se conoce.", usage: "Úsalo al inicio o medio de la oración (Sujeto + Verbo) cuando la razón ya es conocida por el oyente/lector.", category: "Cause" },
+            { word: "due to", meaning: "debido a (+ nombre)", example: "The delay was [blank] traffic.", exampleEs: "El retraso fue debido al tráfico.", explanation: "Se utiliza antes de un sustantivo, es más formal que 'because of'.", usage: "Úsalo de forma idéntica a 'because of' (+ sustantivo), comúnmente después del verbo 'to be'.", category: "Cause" },
+            { word: "because of this", meaning: "por este motivo", example: "It was unsafe. [blank], we left.", exampleEs: "Era inseguro. Por este motivo, nos fuimos.", explanation: "Conecta la razón mencionada antes con la consecuencia actual.", usage: "Úsalo al inicio de una oración, seguido de coma, para enlazar el resultado actual con la situación anterior.", category: "Cause" },
+            { word: "so", meaning: "así que / por eso", example: "It was late, [blank] we left.", exampleEs: "Era tarde, así que nos fuimos.", explanation: "'So' introduce el resultado o consecuencia (muy común al hablar).", usage: "Úsalo a la mitad de la frase para enlazar de manera informal la causa (antes) con el resultado (después).", category: "Result" },
+            { word: "therefore", meaning: "por lo tanto", example: "She practiced; [blank], she improved.", exampleEs: "Ella practicó; por lo tanto, mejoró.", explanation: "Formal, indica que el resultado es lógico basado en la causa.", usage: "Úsalo en inglés formal, típicamente después de punto y coma o al inicio de una nueva oración, seguido de coma.", category: "Result" },
+            { word: "thus", meaning: "por consiguiente", example: "Costs rose; [blank], prices increased.", exampleEs: "Los costos subieron; por consiguiente, los precios aumentaron.", explanation: "Formal, a menudo se usa en contextos académicos o escritos.", usage: "Úsalo en lenguaje académico/formal para mostrar consecuencia directa, de estructura similar a 'therefore'.", category: "Result" },
+            { word: "consequently", meaning: "en consecuencia", example: "He missed the bus; [blank], he was late.", exampleEs: "Perdió el autobús; en consecuencia, llegó tarde.", explanation: "Muestra el efecto directo de una acción anterior.", usage: "Úsalo al inicio de la oración o tras punto y coma, seguido de coma, para enfocar el 'efecto' (la consecuencia).", category: "Result" },
+            { word: "as a result", meaning: "como resultado", example: "It rained; [blank], we stayed home.", exampleEs: "Llovió; como resultado, nos quedamos en casa.", explanation: "Expresa de forma clara que algo pasó debido a un evento previo.", usage: "Úsalo para iniciar la oración de la consecuencia, separándolo de la idea principal con una coma.", category: "Result" },
+            { word: "hence", meaning: "de ahí que / por tanto", example: "The road was closed; [blank] the delay.", exampleEs: "La carretera estaba cerrada; de ahí el retraso.", explanation: "Formal. A menudo se usa sin un verbo justo después.", usage: "Úsalo para mostrar consecuencia; peculiarmente puede ir seguido solo de un sustantivo (ej. 'hence the delay').", category: "Result" },
+            { word: "for this reason", meaning: "por esta razón", example: "[blank], we canceled the trip.", exampleEs: "Por esta razón, cancelamos el viaje.", explanation: "Conecta un resultado con una justificación clara previa.", usage: "Úsalo al inicio de una oración (con coma) para asegurar que el lector conecte el resultado con la causa leída previamente.", category: "Result" },
+            { word: "accordingly", meaning: "en consecuencia", example: "The plan changed; [blank], we adapted.", exampleEs: "El plan cambió; en consecuencia, nos adaptamos.", explanation: "Significa actuar de una manera que cuadra con la situación.", usage: "Úsalo para indicar que se tomó una acción correspondiente y proporcional a la situación.", category: "Result" },
+            
+            // EXAMPLES & COMPARISON
+            { word: "for example", meaning: "por ejemplo", example: "Many fruits, [blank] apples, have fiber.", exampleEs: "Muchas frutas, por ejemplo las manzanas, tienen fibra.", explanation: "La forma más común de dar ejemplos específicos.", usage: "Úsalo al inicio de oración o intercalado entre comas justo antes del ejemplo.", category: "Illustration" },
+            { word: "for instance", meaning: "por ejemplo", example: "Try a sport, [blank] tennis.", exampleEs: "Prueba un deporte, por ejemplo el tenis.", explanation: "Sinónimo directo de 'for example'.", usage: "Se usa exactamente igual que 'for example', ideal para evitar repeticiones al escribir.", category: "Illustration" },
+            { word: "such as", meaning: "como/tales como", example: "I like sports [blank] tennis.", exampleEs: "Me gustan los deportes como el tenis.", explanation: "Da ejemplos sin hacer una pausa fuerte en la oración.", usage: "Úsalo seguido DIRECTAMENTE de los ejemplos (sustantivos), sin ponerle una coma después de 'as'.", category: "Illustration" },
+            { word: "including", meaning: "incluyendo", example: "Five students, [blank] Ana, passed.", exampleEs: "Cinco estudiantes, incluyendo a Ana, aprobaron.", explanation: "Menciona a alguien o algo como parte de un grupo mayor.", usage: "Úsalo para resaltar que el ejemplo es un subconjunto o una parte del grupo previamente mencionado.", category: "Illustration" },
+            { word: "namely", meaning: "a saber / específicamente", example: "We need two things, [blank] time and money.", exampleEs: "Necesitamos dos cosas, específicamente tiempo y dinero.", explanation: "Se usa para ser exacto sobre a qué o a quién te refieres.", usage: "Úsalo antes de nombrar específicamente la totalidad de las cosas o personas a las que acabas de referirte de forma general.", category: "Illustration" },
+            { word: "in other words", meaning: "en otras palabras", example: "It is optional; [blank], you can skip it.", exampleEs: "Es opcional; en otras palabras, puedes saltártelo.", explanation: "Explica algo de una manera más simple o clara.", usage: "Úsalo al inicio de una oración (con coma) para reformular o simplificar la explicación anterior.", category: "Illustration" },
+            { word: "to illustrate", meaning: "para ilustrar", example: "[blank], consider this example.", exampleEs: "Para ilustrar, considera este ejemplo.", explanation: "Formal, usado antes de dar una demostración o ejemplo claro.", usage: "Úsalo al inicio de una oración (con coma) en ensayos o textos formales antes de presentar un caso de estudio o un gran ejemplo.", category: "Illustration" },
+            { word: "similarly", meaning: "de manera similar", example: "Ana studies daily; [blank], Luis reviews.", exampleEs: "Ana estudia a diario; de manera similar, Luis repasa.", explanation: "Muestra que algo ocurre de forma parecida a lo mencionado.", usage: "Úsalo al inicio de una oración (con coma) para conectar dos situaciones que tienen comportamientos parecidos.", category: "Comparison" },
+            { word: "likewise", meaning: "igualmente", example: "He enjoys art; [blank], she loves painting.", exampleEs: "Él disfruta el arte; igualmente, ella ama la pintura.", explanation: "Similar a 'similarly', indica similitud o que aplica igual.", usage: "Úsalo como un conector formal (con coma) o al final de frase para decir 'yo también' / 'igualmente'.", category: "Comparison" },
+            { word: "equally", meaning: "igualmente / por igual", example: "Both answers are [blank] acceptable.", exampleEs: "Ambas respuestas son igualmente aceptables.", explanation: "Indica que dos cosas tienen el mismo valor, nivel o grado.", usage: "Úsalo justo antes del adjetivo o verbo para enfatizar que ambas cosas están al mismo nivel sin diferencias.", category: "Comparison" },
+            { word: "in the same way", meaning: "de la misma manera", example: "[blank], practice helps memory.", exampleEs: "De la misma manera, la práctica ayuda a la memoria.", explanation: "Establece una analogía directa entre dos situaciones.", usage: "Úsalo al principio de la oración, seguido de coma, para establecer que el mecanismo o resultado es idéntico al caso anterior.", category: "Comparison" },
+            { word: "just as", meaning: "al igual que", example: "[blank] adults learn, children adapt.", exampleEs: "Al igual que los adultos aprenden, los niños se adaptan.", explanation: "Muestra que dos acciones ocurren de la misma forma.", usage: "Úsalo al principio de la cláusula seguido de un Sujeto + Verbo para plantear una comparación equivalente de acciones.", category: "Comparison" },
+            { word: "as ... as", meaning: "tan... como", example: "This task is [blank] easy [blank] the first one.", exampleEs: "Esta tarea es tan fácil como la primera.", explanation: "Estructura comparativa de igualdad.", usage: "Úsalo envolviendo en el centro a un adjetivo (as easy as) o adverbio para indicar que dos elementos empatan en esa cualidad.", category: "Comparison", special: true },
+            { word: "similar to", meaning: "similar a", example: "Her answer is [blank] mine.", exampleEs: "Su respuesta es similar a la mía.", explanation: "Compara dos cosas diciendo que tienen mucho en común.", usage: "Úsalo siempre seguido de un sustantivo o pronombre (similar to + Noun) para mostrar semejanza física o conceptual.", category: "Comparison" },
+
+            // TIME, CONDITION & PLACE
+            { word: "meanwhile", meaning: "mientras tanto", example: "I cooked; [blank], she cleaned.", exampleEs: "Yo cociné; mientras tanto, ella limpió.", explanation: "Indica que dos cosas pasan al mismo tiempo.", usage: "Úsalo al inicio de la segunda oración (con coma) para describir otra acción que ocurre simultáneamente en otro lado.", category: "Time" },
+            { word: "eventually", meaning: "finalmente / con el tiempo", example: "[blank], we found a solution.", exampleEs: "Con el tiempo, encontramos una solución.", explanation: "Algo ocurre después de un tiempo o de mucho esfuerzo.", usage: "Úsalo para indicar que un evento ocurrió a largo plazo, típicamente después de demoras o dificultades.", category: "Time" },
+            { word: "at last", meaning: "por fin", example: "[blank], the bus arrived.", exampleEs: "Por fin, llegó el autobús.", explanation: "Indica alivio cuando algo sucede después de una larga espera.", usage: "Úsalo para enfatizar fuertemente que la espera por fin ha terminado (lleva carga emocional de alivio o impaciencia).", category: "Time" },
+            { word: "as soon as", meaning: "tan pronto como", example: "Call me [blank] you arrive.", exampleEs: "Llámame tan pronto como llegues.", explanation: "Indica que algo debe pasar inmediatamente después de otra cosa.", usage: "Úsalo seguido de Sujeto + Verbo para marcar inmediatez absoluta entre una acción y la siguiente.", category: "Time" },
+            { word: "once", meaning: "una vez que", example: "[blank] you finish, check your answers.", exampleEs: "Una vez que termines, revisa tus respuestas.", explanation: "Significa 'desde el momento en que' ocurre la acción.", usage: "Úsalo al inicio de la condición (Sujeto + Verbo) marcando que la acción principal no ocurrirá hasta que esta se complete.", category: "Time" },
+            { word: "until", meaning: "hasta que", example: "Wait [blank] she arrives.", exampleEs: "Espera hasta que ella llegue.", explanation: "Indica el momento en el que una acción se detiene.", usage: "Úsalo para marcar el límite de tiempo. Va seguido de una hora específica, sustantivo o una cláusula (Sujeto + Verbo).", category: "Time" },
+            { word: "during", meaning: "durante (+ sustantivo)", example: "No phones [blank] the exam.", exampleEs: "Sin teléfonos durante el examen.", explanation: "'During' va seguido de un periodo o evento (sustantivo).", usage: "Úsalo seguido estrictamente de un sustantivo o frase nominal para señalar en el transcurso de qué evento sucede algo.", category: "Time" },
+            { word: "if", meaning: "si", example: "[blank] it rains, we will stay in.", exampleEs: "Si llueve, nos quedaremos en casa.", explanation: "Introduce una condición básica.", usage: "Úsalo al inicio o mitad de la oración para plantear el requisito (Sujeto + Verbo) que hace que algo pase.", category: "Condition" },
+            { word: "unless", meaning: "a menos que", example: "You will miss it [blank] you hurry.", exampleEs: "Lo perderás a menos que te des prisa.", explanation: "Es el equivalente a 'if not' (si no haces algo...).", usage: "Úsalo (con Sujeto + Verbo positivo) para establecer la única condición que evitará que algo pase.", category: "Condition" },
+            { word: "as long as", meaning: "siempre que", example: "You can go [blank] you finish.", exampleEs: "Puedes ir siempre que termines.", explanation: "Condiciona una acción a que se cumpla otro requisito.", usage: "Úsalo para otorgar permiso o establecer una condición con la idea de 'solamente bajo la condición de que...'", category: "Condition" },
+            { word: "otherwise", meaning: "de lo contrario", example: "Hurry up; [blank], we will be late.", exampleEs: "Date prisa; de lo contrario, llegaremos tarde.", explanation: "Indica lo que pasará si no se cumple la condición previa.", usage: "Úsalo al inicio de la segunda oración (con coma) para indicar la consecuencia negativa si no se hace lo primero.", category: "Condition" },
+            { word: "in case", meaning: "por si acaso", example: "Take an umbrella [blank] it rains.", exampleEs: "Lleva un paraguas por si acaso llueve.", explanation: "Hacer algo preparándose para una posibilidad futura.", usage: "Úsalo (seguido de Sujeto + Verbo en presente) para explicar la precaución tomada ante un posible escenario futuro.", category: "Condition" },
+            { word: "next to", meaning: "junto a / al lado de", example: "The bank is [blank] the school.", exampleEs: "El banco está al lado de la escuela.", explanation: "Indica proximidad inmediata.", usage: "Úsalo seguido de un sustantivo para referirte a que algo está literalmente al costado de otro objeto.", category: "Place" },
+            { word: "nearby", meaning: "cerca", example: "There is a cafe [blank].", exampleEs: "Hay un café cerca.", explanation: "Se ubica a poca distancia (suele ir al final).", usage: "Úsalo generalmente al final de la frase o antes de un sustantivo (nearby cafe) para indicar cercanía sin dar un punto de referencia exacto.", category: "Place" },
+            { word: "opposite", meaning: "enfrente de", example: "The station is [blank] the library.", exampleEs: "La estación está enfrente de la biblioteca.", explanation: "Cara a cara o en el lado contrario.", usage: "Úsalo seguido de un sustantivo para indicar que un lugar está cara a cara con otro, a menudo cruzando una calle o espacio.", category: "Place" },
+
+            // EMPHASIS & CONCLUSION
+            { word: "above all", meaning: "sobre todo", example: "[blank], read the context.", exampleEs: "Sobre todo, lee el contexto.", explanation: "Destaca la información más importante de todas.", usage: "Úsalo al inicio de oración (con coma) para recalcar que, de todas las instrucciones o cosas, esa es la prioridad máxima.", category: "Emphasis" },
+            { word: "in particular", meaning: "en particular", example: "I like science, [blank] biology.", exampleEs: "Me gusta la ciencia, en particular la biología.", explanation: "Se enfoca específicamente en un elemento.", usage: "Úsalo después de mencionar una categoría general para señalar al miembro más destacado de ese grupo.", category: "Emphasis" },
+            { word: "especially", meaning: "especialmente", example: "This rule is [blank] important.", exampleEs: "Esta regla es especialmente importante.", explanation: "Sinónimo de 'in particular', resalta la importancia.", usage: "Úsalo delante de un adjetivo o sustantivo para potenciar su importancia por encima de los demás.", category: "Emphasis" },
+            { word: "indeed", meaning: "de hecho / en efecto", example: "[blank], the results were excellent.", exampleEs: "De hecho, los resultados fueron excelentes.", explanation: "Se usa para confirmar y enfatizar una declaración previa.", usage: "Úsalo para reafirmar y potenciar una afirmación que acabas de hacer (al inicio de oración o dentro de ella).", category: "Emphasis" },
+            { word: "notably", meaning: "en especial", example: "Many improved, [blank] the beginners.", exampleEs: "Muchos mejoraron, en especial los principiantes.", explanation: "Llama la atención sobre un buen ejemplo de lo que se habla.", usage: "Úsalo para destacar al ejemplo más claro, importante o sorprendente de lo que acabas de decir.", category: "Emphasis" },
+            { word: "in conclusion", meaning: "en conclusión", example: "[blank], the plan worked.", exampleEs: "En conclusión, el plan funcionó.", explanation: "Formal. Usado para cerrar y resumir puntos principales.", usage: "Úsalo estrictamente en contextos formales o ensayos, abriendo el último párrafo para dar el cierre al tema.", category: "Conclusion" },
+            { word: "to sum up", meaning: "en resumen", example: "[blank], practice is essential.", exampleEs: "En resumen, la práctica es esencial.", explanation: "Usado para terminar dando el punto más importante.", usage: "Úsalo al principio del cierre para condensar varios puntos expuestos previamente en una idea central.", category: "Conclusion" },
+            { word: "in summary", meaning: "en resumen", example: "[blank], the results were positive.", exampleEs: "En resumen, los resultados fueron positivos.", explanation: "Similar a 'to sum up', muy común en ensayos.", usage: "Úsalo (con coma) para introducir una recapitulación rápida y formal de los hallazgos o argumentos.", category: "Conclusion" },
+            { word: "in short", meaning: "en pocas palabras", example: "[blank], we need more time.", exampleEs: "En pocas palabras, necesitamos más tiempo.", explanation: "Resume una explicación compleja en una frase sencilla.", usage: "Úsalo al inicio de oración (con coma) para saltarte explicaciones largas y dar la conclusión directa y cruda.", category: "Conclusion" },
+            { word: "overall", meaning: "en general / en conjunto", example: "[blank], the class performed well.", exampleEs: "En general, la clase tuvo un buen desempeño.", explanation: "Considerando todas las partes o aspectos de algo.", usage: "Úsalo para dar una opinión unificada o conclusión tras considerar diferentes factores (buenos y malos).", category: "Conclusion" },
+            { word: "all in all", meaning: "en definitiva", example: "[blank], it was a good day.", exampleEs: "En definitiva, fue un buen día.", explanation: "Considerando todos los detalles para dar una opinión final.", usage: "Úsalo de forma parecida a 'overall', para dar un veredicto definitivo tras sopesar todas las partes del asunto.", category: "Conclusion" },
+            { word: "in general", meaning: "en general", example: "[blank], students enjoy the course.", exampleEs: "En general, los estudiantes disfrutan el curso.", explanation: "Hablando de forma amplia, sin excepciones detalladas.", usage: "Úsalo al principio de una oración para establecer que la afirmación aplica a la mayoría de los casos, ignorando raras excepciones.", category: "Generalization" },
+            { word: "as a rule", meaning: "por regla general", example: "[blank], I study every day.", exampleEs: "Por regla general, estudio todos los días.", explanation: "Describe un hábito o algo que usualmente es cierto.", usage: "Úsalo (con coma inicial) para describir una norma de comportamiento estándar, hábito personal o procedimiento de una organización.", category: "Generalization" },
+            { word: "in order to", meaning: "para / con el fin de", example: "I practice [blank] improve.", exampleEs: "Practico con el fin de mejorar.", explanation: "Muestra el propósito de una acción.", usage: "Úsalo siempre seguido de un verbo en infinitivo base para aclarar el objetivo formal detrás de una acción.", category: "Purpose" },
+            { word: "for this purpose", meaning: "con este propósito", example: "[blank], we made a plan.", exampleEs: "Con este propósito, hicimos un plan.", explanation: "Conecta una acción con el objetivo ya mencionado.", usage: "Úsalo al inicio de oración (con coma) para indicar que la acción que sigue se diseñó explícitamente para lograr el objetivo previo.", category: "Purpose" }
+        ].filter(item => !item.special);
+
+        // Helper Functions
+        const shuffle = (array) => [...array].sort(() => Math.random() - 0.5);
+        
+        const getRandomWords = (count, excludeWord, category = null) => {
+            let pool = database.filter(w => w.word !== excludeWord);
+            if (category) {
+                const categoryPool = pool.filter(w => w.category === category);
+                if (categoryPool.length >= count) pool = categoryPool;
+            }
+            return shuffle(pool).slice(0, count).map(w => w.word);
+        };
+
+        // --- COMPONENTS ---
+
+        // 1. Icon Component (SVG wrappers)
+        const Icon = ({ name, className }) => {
+            // Using placeholder logic since Lucide needs to be initialized. 
+            // Better to use inline SVGs for full reliability in single file.
+            const icons = {
+                book: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+                play: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                back: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
+                check: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+                x: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+                star: <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>,
+                globe: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                tag: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>,
+                edit: <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            };
+            return icons[name] || null;
+        };
+
+        // 2. Home Screen
+        const HomeScreen = ({ onNavigate }) => (
+            <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center fade-in">
+                <div className="w-24 h-24 glass-button rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.3)]">
+                    <Icon name="book" className="w-12 h-12 text-blue-300" />
+                </div>
+                <h1 className="text-4xl font-extrabold mb-2 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-cyan-300">Cloze Master</h1>
+                <p className="text-slate-300 mb-10 text-lg">Aprende y domina los conectores en inglés.</p>
+                
+                <div className="w-full space-y-4">
+                    <button 
+                        onClick={() => onNavigate('learn')}
+                        className="w-full py-4 bg-blue-600/80 backdrop-blur-md text-white rounded-3xl font-bold text-lg shadow-[0_4px_15px_rgba(59,130,246,0.4)] hover:bg-blue-500/80 transition-all flex items-center justify-center gap-3 active:scale-95 border border-blue-400/30"
+                    >
+                        <Icon name="book" className="w-6 h-6" />
+                        Sección de Aprendizaje
+                    </button>
+                    <button 
+                        onClick={() => onNavigate('game_modes')}
+                        className="w-full py-4 glass-button text-slate-100 rounded-3xl font-bold text-lg shadow-lg hover:bg-white/10 transition-all flex items-center justify-center gap-3 active:scale-95"
+                    >
+                        <Icon name="play" className="w-6 h-6 text-emerald-400" />
+                        Jugar y Practicar
+                    </button>
+                </div>
+            </div>
+        );
+
+        // 3. Learn Screen (Dictionary)
+        const LearnScreen = ({ onBack }) => {
+            const categories = [...new Set(database.map(item => item.category))];
+            const [activeCategory, setActiveCategory] = useState(categories[0]);
+            
+            return (
+                <div className="flex flex-col min-h-screen fade-in">
+                    <div className="glass-header text-white p-4 flex items-center sticky top-0 z-20">
+                        <button onClick={onBack} className="p-2 mr-2 bg-white/5 rounded-full hover:bg-white/10 transition border border-white/5">
+                            <Icon name="back" className="w-6 h-6" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-100">Aprendizaje</h2>
+                    </div>
+                    
+                    {/* Category Selector (Samsung Glassmorphic style) */}
+                    <div className="sticky top-[65px] z-10 p-3 bg-slate-900/50 backdrop-blur-xl border-b border-white/5 hide-scrollbar overflow-x-auto whitespace-nowrap flex gap-2">
+                        {categories.map(cat => (
+                            <button 
+                                key={cat}
+                                onClick={() => setActiveCategory(cat)}
+                                className={`px-5 py-2.5 rounded-2xl font-bold text-sm transition-all border backdrop-blur-md ${
+                                    activeCategory === cat 
+                                        ? 'bg-blue-500/20 border-blue-400/50 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                                }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    <div className="p-4 space-y-5 overflow-y-auto pb-20">
+                        {database.filter(i => i.category === activeCategory).map((item, idx) => (
+                            <div key={idx} className="glass-panel p-5 slide-up shadow-xl" style={{animationDelay: `${(idx % 10) * 0.05}s`}}>
+                                <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+                                    <span className="font-extrabold text-blue-100 text-2xl tracking-tight">{item.word}</span>
+                                    <span className="text-xs font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-400/20">{item.meaning}</span>
+                                </div>
+                                
+                                <div className="bg-black/30 rounded-2xl p-4 mb-4 border border-white/5 backdrop-blur-sm">
+                                    <p className="text-slate-200 text-sm mb-2 font-medium">
+                                        <span className="opacity-70 mr-1">🇬🇧</span> {item.example.replace('[blank]', `__${item.word}__`)}
+                                    </p>
+                                    <p className="text-slate-400 text-sm">
+                                        <span className="opacity-70 mr-1">🇪🇸</span> {item.exampleEs}
+                                    </p>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    <div className="bg-blue-900/20 p-4 rounded-2xl border border-blue-500/10">
+                                        <p className="text-xs text-blue-300 font-bold mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span className="text-[10px]">📚</span> ¿Por qué se usa?
+                                        </p>
+                                        <p className="text-slate-200 text-sm leading-relaxed">{item.explanation}</p>
+                                    </div>
+                                    <div className="bg-emerald-900/20 p-4 rounded-2xl border border-emerald-500/10">
+                                        <p className="text-xs text-emerald-300 font-bold mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span className="text-[10px]">💡</span> ¿Cómo y cuándo usarlo?
+                                        </p>
+                                        <p className="text-slate-200 text-sm leading-relaxed">{item.usage}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // 3.5. Game Modes Screen (NEW)
+        const GameModesScreen = ({ onBack, onSelectMode }) => {
+            return (
+                <div className="flex flex-col min-h-screen fade-in">
+                    <div className="glass-header text-white p-4 flex items-center sticky top-0 z-10">
+                        <button onClick={onBack} className="p-2 mr-2 bg-white/5 rounded-full hover:bg-white/10 transition border border-white/5">
+                            <Icon name="back" className="w-6 h-6" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-100">Modos de Juego</h2>
+                    </div>
+                    
+                    <div className="p-6 flex-1 flex flex-col justify-center gap-5">
+                        <button onClick={() => onSelectMode('cloze')} className="slide-up p-6 glass-panel hover:border-blue-500/30 transition active:scale-95 text-left relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <div className="flex items-center gap-3 mb-2 relative z-10">
+                                <Icon name="edit" className="w-7 h-7 text-blue-400" />
+                                <h3 className="text-2xl font-bold text-blue-300">Completa la Frase</h3>
+                            </div>
+                            <p className="text-slate-300 text-sm relative z-10">El clásico. Lee la oración y encuentra el conector que falta.</p>
+                        </button>
+
+                        <button onClick={() => onSelectMode('translation')} className="slide-up p-6 glass-panel hover:border-purple-500/30 transition active:scale-95 text-left relative overflow-hidden group" style={{animationDelay: '0.1s'}}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <div className="flex items-center gap-3 mb-2 relative z-10">
+                                <Icon name="globe" className="w-7 h-7 text-purple-400" />
+                                <h3 className="text-2xl font-bold text-purple-300">Traductor Rápido</h3>
+                            </div>
+                            <p className="text-slate-300 text-sm relative z-10">Te damos el significado en español, adivina el conector en inglés.</p>
+                        </button>
+
+                        <button onClick={() => onSelectMode('category')} className="slide-up p-6 glass-panel hover:border-amber-500/30 transition active:scale-95 text-left relative overflow-hidden group" style={{animationDelay: '0.2s'}}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <div className="flex items-center gap-3 mb-2 relative z-10">
+                                <Icon name="tag" className="w-7 h-7 text-amber-400" />
+                                <h3 className="text-2xl font-bold text-amber-300">Clasificador</h3>
+                            </div>
+                            <p className="text-slate-300 text-sm relative z-10">¿Addition? ¿Contrast? Elige a qué categoría pertenece cada palabra.</p>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Game Setup Screen
+        const GameSetupScreen = ({ gameMode, onBack, onStartGame }) => {
+            return (
+                <div className="flex flex-col min-h-screen fade-in">
+                    <div className="glass-header text-white p-4 flex items-center sticky top-0 z-10">
+                        <button onClick={onBack} className="p-2 mr-2 bg-white/5 rounded-full hover:bg-white/10 transition border border-white/5">
+                            <Icon name="back" className="w-6 h-6" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-100">Elige la Dificultad</h2>
+                    </div>
+                    
+                    <div className="p-6 flex-1 flex flex-col justify-center gap-5">
+                        <button onClick={() => onStartGame('easy')} className="slide-up p-6 glass-panel hover:border-emerald-500/30 transition active:scale-95 text-left relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <h3 className="text-2xl font-bold text-emerald-300 mb-2 relative z-10">Fácil</h3>
+                            <p className="text-slate-300 text-sm relative z-10">Opciones múltiples reducidas. Distractores evidentes.</p>
+                        </button>
+
+                        <button onClick={() => onStartGame('medium')} className="slide-up p-6 glass-panel hover:border-amber-500/30 transition active:scale-95 text-left relative overflow-hidden group" style={{animationDelay: '0.1s'}}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <h3 className="text-2xl font-bold text-amber-300 mb-2 relative z-10">Medio</h3>
+                            <p className="text-slate-300 text-sm relative z-10">Opciones múltiples ampliadas. Distractores confusos.</p>
+                        </button>
+
+                        <button onClick={() => onStartGame('hard')} className="slide-up p-6 glass-panel hover:border-rose-500/30 transition active:scale-95 text-left relative overflow-hidden group" style={{animationDelay: '0.2s'}}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 blur-xl"></div>
+                            <h3 className="text-2xl font-bold text-rose-300 mb-2 relative z-10">Difícil</h3>
+                            <p className="text-slate-300 text-sm relative z-10">
+                                {gameMode === 'category' 
+                                    ? "Todas las categorías disponibles. ¡Prueba tu memoria!"
+                                    : "Escribe la respuesta. Sin opciones. ¡Pon a prueba tu memoria!"}
+                            </p>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. Game Screen
+        const GameScreen = ({ gameMode, difficulty, onBack, onFinish }) => {
+            const [questions, setQuestions] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [score, setScore] = useState(0);
+            const [feedback, setFeedback] = useState(null); // { isCorrect: bool, selected: string }
+            const [typedAnswer, setTypedAnswer] = useState("");
+
+            // Initialize game
+            useEffect(() => {
+                const numQuestions = 10;
+                const selected = shuffle(database).slice(0, numQuestions);
+                const categoriesList = [...new Set(database.map(d => d.category))];
+                
+                const preparedQuestions = selected.map(q => {
+                    let options = [];
+                    let prompt = "";
+                    let correctAnswer = "";
+
+                    if (gameMode === 'cloze') {
+                        correctAnswer = q.word;
+                        prompt = q.example;
+                        if (difficulty === 'easy') options = shuffle([q.word, ...getRandomWords(2, q.word)]);
+                        if (difficulty === 'medium') options = shuffle([q.word, ...getRandomWords(3, q.word, q.category)]);
+                    } else if (gameMode === 'translation') {
+                        correctAnswer = q.word;
+                        prompt = q.meaning;
+                        if (difficulty === 'easy') options = shuffle([q.word, ...getRandomWords(2, q.word)]);
+                        if (difficulty === 'medium') options = shuffle([q.word, ...getRandomWords(3, q.word)]);
+                    } else if (gameMode === 'category') {
+                        correctAnswer = q.category;
+                        prompt = q.word;
+                        if (difficulty === 'easy') {
+                            const otherCats = shuffle(categoriesList.filter(c => c !== q.category)).slice(0, 1);
+                            options = shuffle([q.category, ...otherCats]);
+                        } else if (difficulty === 'medium') {
+                            const otherCats = shuffle(categoriesList.filter(c => c !== q.category)).slice(0, 3);
+                            options = shuffle([q.category, ...otherCats]);
+                        } else {
+                            options = shuffle([...categoriesList]); // Hard: All categories
+                        }
+                    }
+                    
+                    return { original: q, prompt, correctAnswer, options };
+                });
+                
+                setQuestions(preparedQuestions);
+            }, [difficulty, gameMode]);
+
+            if (questions.length === 0) return <div className="p-10 text-center">Cargando...</div>;
+
+            const currentQ = questions[currentIndex];
+            const isHard = difficulty === 'hard';
+            const isTypingMode = isHard && gameMode !== 'category';
+            const progress = ((currentIndex) / questions.length) * 100;
+
+            const handleAnswer = (answer) => {
+                if (feedback) return; 
+                
+                const isCorrect = answer.toLowerCase().trim() === currentQ.correctAnswer.toLowerCase();
+                if (isCorrect) setScore(s => s + 1);
+                
+                setFeedback({ isCorrect, selected: answer });
+            };
+
+            const handleNext = () => {
+                if (currentIndex < questions.length - 1) {
+                    setCurrentIndex(i => i + 1);
+                    setFeedback(null);
+                    setTypedAnswer("");
+                } else {
+                    onFinish(score + (feedback?.isCorrect ? 1 : 0), questions.length);
+                }
+            };
+
+            return (
+                <div className="flex flex-col min-h-screen">
+                    {/* Header & Progress */}
+                    <div className="glass-header p-4 z-10 flex flex-col gap-3">
+                        <div className="flex justify-between items-center">
+                            <button onClick={onBack} className="text-slate-400 hover:text-slate-200 bg-white/5 p-1 rounded-full">
+                                <Icon name="x" className="w-6 h-6" />
+                            </button>
+                            <span className="font-bold text-slate-300 uppercase text-xs tracking-widest bg-black/20 px-3 py-1 rounded-full border border-white/5">
+                                Pregunta {currentIndex + 1} / {questions.length}
+                            </span>
+                            <span className="font-bold text-blue-300 bg-white/5 px-3 py-1 rounded-full border border-blue-400/20">⭐ {score}</span>
+                        </div>
+                        <div className="w-full bg-black/30 rounded-full h-2 overflow-hidden border border-white/5">
+                            <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]" style={{ width: `${progress}%` }}></div>
+                        </div>
+                    </div>
+
+                    {/* Question Area */}
+                    <div className="flex-1 flex flex-col p-5">
+                        <div className="glass-panel p-8 mb-8 text-center min-h-[160px] flex flex-col justify-center slide-up shadow-2xl relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent"></div>
+                            <p className="text-xs font-bold text-blue-300 mb-4 uppercase tracking-widest relative z-10 bg-blue-500/10 inline-block mx-auto px-3 py-1 rounded-full border border-blue-500/20">
+                                {gameMode === 'category' ? 'Clasificador' : currentQ.original.category}
+                            </p>
+                            <h2 className="text-2xl font-medium text-slate-50 leading-relaxed relative z-10">
+                                {gameMode === 'cloze' && currentQ.prompt.split('[blank]').map((part, i, arr) => (
+                                    <React.Fragment key={i}>
+                                        {part}
+                                        {i !== arr.length - 1 && (
+                                            <span className={`inline-block border-b-2 mx-1 px-3 font-bold min-w-[70px] text-center pb-1 ${
+                                                feedback 
+                                                    ? (feedback.isCorrect ? 'border-emerald-400 text-emerald-300' : 'border-rose-400 text-rose-300')
+                                                    : 'border-slate-400 text-slate-200'
+                                            }`}>
+                                                {feedback ? (feedback.isCorrect ? currentQ.correctAnswer : feedback.selected || '___') : (isTypingMode ? typedAnswer || '___' : '___')}
+                                            </span>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                                {gameMode === 'translation' && (
+                                    <span>Traducción:<br/><strong className="text-blue-200 block mt-2 text-3xl">"{currentQ.prompt}"</strong></span>
+                                )}
+                                {gameMode === 'category' && (
+                                    <span>¿A qué categoría pertenece:<br/><strong className="text-amber-200 block mt-2 text-4xl tracking-tight">"{currentQ.prompt}"</strong>?</span>
+                                )}
+                            </h2>
+                        </div>
+
+                        {/* Interactive Area */}
+                        <div className="flex-1 flex flex-col justify-end pb-4 slide-up" style={{animationDelay: '0.1s'}}>
+                            {!isTypingMode ? (
+                                <div className="space-y-4">
+                                    {currentQ.options.map((opt, idx) => {
+                                        let btnClass = "w-full p-4 rounded-3xl font-semibold text-lg border transition-all active:scale-95 text-left pl-6 backdrop-blur-md ";
+                                        if (!feedback) {
+                                            btnClass += "bg-white/5 border-white/10 text-slate-200 hover:border-blue-400/50 hover:bg-white/10 shadow-lg";
+                                        } else {
+                                            if (opt === currentQ.correctAnswer) {
+                                                btnClass += "bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.3)]"; // Correct always highlighted
+                                            } else if (opt === feedback.selected) {
+                                                btnClass += "bg-rose-500/20 border-rose-400/50 text-rose-300 shake shadow-[0_0_20px_rgba(244,63,94,0.3)]"; // Wrong selection
+                                            } else {
+                                                btnClass += "bg-black/20 border-white/5 text-slate-500 opacity-50"; // Others faded
+                                            }
+                                        }
+
+                                        return (
+                                            <button 
+                                                key={idx} 
+                                                onClick={() => handleAnswer(opt)}
+                                                disabled={feedback !== null}
+                                                className={btnClass}
+                                            >
+                                                {opt}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <input 
+                                        type="text" 
+                                        value={typedAnswer}
+                                        onChange={(e) => setTypedAnswer(e.target.value)}
+                                        disabled={feedback !== null}
+                                        placeholder="Escribe la palabra en inglés..."
+                                        className={`w-full p-5 rounded-3xl font-semibold text-xl border outline-none text-center transition-colors shadow-lg backdrop-blur-md ${
+                                            feedback 
+                                                ? (feedback.isCorrect ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300' : 'bg-rose-500/20 border-rose-400/50 text-rose-300')
+                                                : 'bg-black/30 border-white/10 text-slate-100 focus:border-blue-400/60 focus:bg-black/40'
+                                        }`}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter' && typedAnswer && !feedback) {
+                                                handleAnswer(typedAnswer);
+                                            }
+                                        }}
+                                    />
+                                    {!feedback && (
+                                        <button 
+                                            onClick={() => handleAnswer(typedAnswer)}
+                                            disabled={!typedAnswer.trim()}
+                                            className="w-full p-4 bg-blue-600/80 backdrop-blur-md text-white rounded-3xl font-bold text-lg disabled:opacity-50 active:scale-95 transition shadow-[0_4px_15px_rgba(59,130,246,0.4)] border border-blue-400/30"
+                                        >
+                                            Comprobar
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Feedback Modal Overlay */}
+                    {feedback && (
+                        <div className="absolute bottom-0 left-0 right-0 glass-panel rounded-t-[2.5rem] rounded-b-none p-6 slide-up z-20 border-t border-white/10 max-h-[85vh] overflow-y-auto">
+                            <div className="flex items-start gap-4 mb-5">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 shadow-lg ${feedback.isCorrect ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-rose-500/20 border border-rose-500/40'}`}>
+                                    {feedback.isCorrect ? (
+                                        <Icon name="check" className="w-8 h-8 text-emerald-400" />
+                                    ) : (
+                                        <Icon name="x" className="w-8 h-8 text-rose-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1 mt-1">
+                                    <h3 className={`text-2xl font-extrabold tracking-tight ${feedback.isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {feedback.isCorrect ? '¡Excelente!' : 'Casi...'}
+                                    </h3>
+                                    {!feedback.isCorrect && (
+                                        <p className="text-slate-300 mt-1">
+                                            La correcta era <strong className="text-white bg-white/10 px-2 py-0.5 rounded-md">{currentQ.correctAnswer}</strong>.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Learning context added in feedback */}
+                            <div className="mb-6 space-y-4 bg-black/20 p-5 rounded-3xl border border-white/5">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                                        🇪🇸 Significado ({currentQ.original.word})
+                                    </p>
+                                    <p className="text-slate-200 text-sm font-medium">"{currentQ.original.meaning}"</p>
+                                </div>
+                                <div className="h-px w-full bg-white/10"></div>
+                                <div>
+                                    <p className="text-xs font-bold text-blue-300 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                                        💡 Regla de uso
+                                    </p>
+                                    <p className="text-slate-300 text-sm leading-relaxed">{currentQ.original.usage}</p>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleNext}
+                                className={`w-full p-4 rounded-3xl font-bold text-lg text-white transition active:scale-95 shadow-lg border ${
+                                    feedback.isCorrect 
+                                        ? 'bg-emerald-600/80 hover:bg-emerald-500/80 border-emerald-400/40 shadow-[0_4px_20px_rgba(16,185,129,0.3)]' 
+                                        : 'bg-rose-600/80 hover:bg-rose-500/80 border-rose-400/40 shadow-[0_4px_20px_rgba(244,63,94,0.3)]'
+                                }`}
+                            >
+                                {currentIndex < questions.length - 1 ? 'Siguiente Pregunta' : 'Ver Resultados'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 6. End Screen
+        const ScoreScreen = ({ score, total, onHome }) => {
+            const percentage = Math.round((score / total) * 100);
+            let message = "¡Sigue practicando!";
+            let color = "text-rose-400";
+            let shadowColor = "rgba(244,63,94,0.3)";
+            
+            if (percentage >= 80) { 
+                message = "¡Excelente trabajo!"; 
+                color = "text-emerald-400"; 
+                shadowColor = "rgba(16,185,129,0.3)";
+            }
+            else if (percentage >= 50) { 
+                message = "¡Buen intento!"; 
+                color = "text-amber-400"; 
+                shadowColor = "rgba(243,156,18,0.3)";
+            }
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center fade-in">
+                    <div className="glass-panel p-10 flex flex-col items-center w-full max-w-sm">
+                        <div className="w-36 h-36 bg-black/30 rounded-full flex items-center justify-center mb-8 relative border border-white/5 backdrop-blur-xl" style={{boxShadow: `0 0 40px ${shadowColor}`}}>
+                            <svg className="w-full h-full absolute top-0 left-0" viewBox="0 0 36 36">
+                                <path
+                                    className="text-white/5"
+                                    strokeWidth="3"
+                                    stroke="currentColor"
+                                    fill="none"
+                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                                <path
+                                    className={color.replace('text-', 'text-')}
+                                    strokeWidth="3"
+                                    strokeDasharray={`${percentage}, 100`}
+                                    stroke="currentColor"
+                                    fill="none"
+                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                            </svg>
+                            <span className={`text-4xl font-extrabold ${color}`}>{percentage}%</span>
+                        </div>
+                        
+                        <h2 className="text-3xl font-extrabold text-slate-50 mb-2">Resultados</h2>
+                        <p className="text-xl text-slate-300 mb-3 bg-white/5 px-4 py-1 rounded-full border border-white/10">{score} de {total} correctas</p>
+                        <p className={`font-bold mb-10 text-xl ${color}`}>{message}</p>
+                        
+                        <button 
+                            onClick={onHome}
+                            className="w-full py-4 bg-blue-600/80 backdrop-blur-md text-white rounded-3xl font-bold text-lg shadow-[0_4px_15px_rgba(59,130,246,0.4)] hover:bg-blue-500/80 transition active:scale-95 border border-blue-400/30"
+                        >
+                            Volver al Inicio
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [view, setView] = useState('home'); // home, learn, game_modes, game_setup, game, score
+            const [gameParams, setGameParams] = useState({ mode: 'cloze', difficulty: 'easy' });
+            const [scoreParams, setScoreParams] = useState({ score: 0, total: 10 });
+
+            const handleNavigate = (newView) => setView(newView);
+            
+            const handleSelectMode = (mode) => {
+                setGameParams(prev => ({ ...prev, mode }));
+                setView('game_setup');
+            };
+
+            const handleStartGame = (difficulty) => {
+                setGameParams(prev => ({ ...prev, difficulty }));
+                setView('game');
+            };
+
+            const handleGameFinish = (score, total) => {
+                setScoreParams({ score, total });
+                setView('score');
+            };
+
+            return (
+                <div className="app-container relative">
+                    {/* Background Ambient Orbs */}
+                    <div className="fixed inset-0 z-[-1] bg-slate-950 overflow-hidden pointer-events-none">
+                        <div className="absolute top-[-10%] left-[-20%] w-96 h-96 bg-blue-600/30 rounded-full blur-[100px]"></div>
+                        <div className="absolute bottom-[-10%] right-[-20%] w-96 h-96 bg-cyan-600/20 rounded-full blur-[100px]"></div>
+                        <div className="absolute top-[40%] left-[60%] w-72 h-72 bg-emerald-600/20 rounded-full blur-[100px]"></div>
+                    </div>
+
+                    <div className="relative z-0 min-h-screen">
+                        {view === 'home' && <HomeScreen onNavigate={handleNavigate} />}
+                        {view === 'learn' && <LearnScreen onBack={() => handleNavigate('home')} />}
+                        {view === 'game_modes' && <GameModesScreen onBack={() => handleNavigate('home')} onSelectMode={handleSelectMode} />}
+                        {view === 'game_setup' && <GameSetupScreen gameMode={gameParams.mode} onBack={() => handleNavigate('game_modes')} onStartGame={handleStartGame} />}
+                        {view === 'game' && <GameScreen gameMode={gameParams.mode} difficulty={gameParams.difficulty} onBack={() => handleNavigate('game_modes')} onFinish={handleGameFinish} />}
+                        {view === 'score' && <ScoreScreen score={scoreParams.score} total={scoreParams.total} onHome={() => handleNavigate('home')} />}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
